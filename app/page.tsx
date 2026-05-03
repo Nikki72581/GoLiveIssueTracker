@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { useState, useEffect, useCallback } from 'react'
 
 const STORAGE_KEY = 'eastfork-assignees'
 const DEFAULT_ASSIGNEES = ['Arline', 'Nicole']
@@ -94,112 +92,6 @@ function Badge({ className, children }: { className: string; children: React.Rea
     <span className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full ${className}`}>
       {children}
     </span>
-  )
-}
-
-function MarkdownEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [preview, setPreview] = useState(false)
-  const [pasteHint, setPasteHint] = useState(false)
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  function wrap(before: string, after: string, placeholder: string) {
-    const ta = ref.current
-    if (!ta) return
-    const s = ta.selectionStart
-    const e = ta.selectionEnd
-    const sel = value.slice(s, e) || placeholder
-    const next = value.slice(0, s) + before + sel + after + value.slice(e)
-    onChange(next)
-    requestAnimationFrame(() => {
-      ta.focus()
-      ta.setSelectionRange(s + before.length, s + before.length + sel.length)
-    })
-  }
-
-  function insertLine(prefix: string) {
-    const ta = ref.current
-    if (!ta) return
-    const s = ta.selectionStart
-    const lineStart = value.lastIndexOf('\n', s - 1) + 1
-    const next = value.slice(0, lineStart) + prefix + value.slice(lineStart)
-    onChange(next)
-    requestAnimationFrame(() => {
-      ta.focus()
-      ta.setSelectionRange(s + prefix.length, s + prefix.length)
-    })
-  }
-
-  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const imageItem = Array.from(e.clipboardData.items).find(item => item.type.startsWith('image/'))
-    if (!imageItem) return
-    e.preventDefault()
-    const file = imageItem.getAsFile()
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const ta = ref.current
-      if (!ta) return
-      const s = ta.selectionStart
-      const insertion = `![screenshot](${dataUrl})`
-      const next = value.slice(0, s) + insertion + value.slice(s)
-      onChange(next)
-      requestAnimationFrame(() => {
-        ta.focus()
-        ta.setSelectionRange(s + insertion.length, s + insertion.length)
-      })
-      setPasteHint(true)
-      setTimeout(() => setPasteHint(false), 2500)
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const toolBtn = 'px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-colors'
-
-  return (
-    <div className="border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#00aeef] focus-within:ring-1 focus-within:ring-[#00aeef]/20 transition-colors">
-      <div className="flex items-center gap-0.5 px-2 py-1.5 bg-slate-50 border-b border-slate-100 flex-wrap">
-        <button type="button" onClick={() => wrap('**', '**', 'bold text')} className={`${toolBtn} font-bold`}>B</button>
-        <button type="button" onClick={() => wrap('*', '*', 'italic text')} className={`${toolBtn} italic`}>I</button>
-        <button type="button" onClick={() => wrap('`', '`', 'code')} className={`${toolBtn} font-mono text-[11px]`}>&lt;/&gt;</button>
-        <span className="w-px h-4 bg-slate-200 mx-1" />
-        <button type="button" onClick={() => insertLine('## ')} className={toolBtn}>H2</button>
-        <button type="button" onClick={() => insertLine('- ')} className={toolBtn}>• List</button>
-        <button type="button" onClick={() => insertLine('1. ')} className={toolBtn}># List</button>
-        <span className="w-px h-4 bg-slate-200 mx-1" />
-        <button type="button" onClick={() => wrap('[', '](https://)', 'link text')} className={toolBtn}>Link</button>
-        <button type="button" onClick={() => wrap('![', '](https://)', 'image description')} className={toolBtn}>Image</button>
-        <div className="ml-auto flex items-center gap-2">
-          {pasteHint && <span className="font-mono text-[9px] text-emerald-600 animate-pulse">Screenshot pasted</span>}
-          <button
-            type="button"
-            onClick={() => setPreview(v => !v)}
-            className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors ${
-              preview ? 'bg-[#00aeef] text-white border-transparent' : 'text-slate-400 border-slate-200 hover:border-[#00aeef] hover:text-[#00aeef]'
-            }`}
-          >
-            {preview ? 'Edit' : 'Preview'}
-          </button>
-        </div>
-      </div>
-      {preview ? (
-        <div className="px-4 py-3 min-h-[200px] bg-white prose prose-sm max-w-none prose-img:rounded-lg prose-img:max-h-96 prose-a:text-[#00aeef]">
-          {value.trim()
-            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
-            : <span className="text-slate-300 text-sm italic">Nothing to preview yet.</span>}
-        </div>
-      ) : (
-        <textarea
-          ref={ref}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onPaste={handlePaste}
-          rows={9}
-          className="w-full px-3 py-3 text-sm text-slate-800 bg-white resize-y focus:outline-none placeholder-slate-300 leading-relaxed"
-          placeholder={`Describe the issue in as much detail as possible.\n\nInclude:\n• Exact steps to reproduce the problem\n• Affected records, accounts, or data\n• Expected behavior vs. what actually happened\n• Any error messages you see\n\nTip: paste a screenshot directly with Cmd+V / Ctrl+V`}
-        />
-      )}
-    </div>
   )
 }
 
@@ -311,8 +203,7 @@ function IssueRow({ issue, onUpdate, onDelete, assignees, onAddAssignee }: {
 
   function truncateDesc(text: string | null) {
     if (!text) return null
-    const plain = text.replace(/!\[.*?\]\(data:.*?\)/g, '[image]').replace(/[#*`[\]()!]/g, '')
-    return plain.length > 80 ? plain.slice(0, 80) + '…' : plain
+    return text.length > 80 ? text.slice(0, 80) + '…' : text
   }
 
   const selectClass = 'w-full bg-white border border-slate-200 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#00aeef] focus:ring-1 focus:ring-[#00aeef]/20 transition-colors'
@@ -376,9 +267,9 @@ function IssueRow({ issue, onUpdate, onDelete, assignees, onAddAssignee }: {
               </div>
 
               {issue.description && (
-                <div className="prose prose-sm max-w-none text-slate-600 prose-img:rounded-lg prose-img:max-h-96 prose-a:text-[#00aeef] prose-headings:text-slate-800 prose-code:text-[#00aeef] prose-code:bg-sky-50 prose-code:rounded prose-code:px-1 mb-4">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.description}</ReactMarkdown>
-                </div>
+                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap mb-4 max-w-2xl">
+                  {issue.description}
+                </p>
               )}
 
               {issue.notes && !editing && (
@@ -405,7 +296,7 @@ function IssueRow({ issue, onUpdate, onDelete, assignees, onAddAssignee }: {
                 <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 max-w-2xl">
                   <div>
                     <label className="block font-mono text-[9px] uppercase tracking-widest text-slate-400 mb-1.5 font-semibold">Description</label>
-                    <MarkdownEditor value={editDescription} onChange={setEditDescription} />
+                    <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={5} className={`${selectClass} resize-y`} placeholder="Describe the issue…" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -619,10 +510,13 @@ export default function Home() {
               </div>
               <div>
                 <label className={labelClass}>Description</label>
-                <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-                  The more detail you include, the faster this gets resolved. Describe what happened, what you expected, which records or screens are affected, and any error messages. You can paste a screenshot directly with Cmd+V / Ctrl+V.
-                </p>
-                <MarkdownEditor value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} />
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={5}
+                  className={`${inputClass} resize-y`}
+                  placeholder="What happened? Which screen or record was affected? What error appeared? Steps to reproduce if known."
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
