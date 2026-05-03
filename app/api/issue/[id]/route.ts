@@ -7,10 +7,11 @@ export async function PATCH(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { status, assigned_to, notes } = body
+  const { status, assigned_to, notes, description } = body
 
   const updates: Record<string, unknown> = {}
 
+  if (description !== undefined) updates.description = description
   if (status !== undefined) {
     updates.status = status
     if (status === 'resolved') {
