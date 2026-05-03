@@ -5,9 +5,10 @@ create table issues (
   description text,
   category text not null check (category in ('data','workflow','configuration','training','integration','other')),
   priority text not null check (priority in ('low','medium','high','critical')),
-  status text not null default 'open' check (status in ('open','in-progress','resolved','wont-fix')),
+  status text not null default 'open' check (status in ('open','in-progress','resolved','wont-fix','post-go-live')),
   submitted_by text not null,
   assigned_to text,
+  module_area text check (module_area in ('financials-banking','distribution','shopify','edi','other-unsure')),
   notes text,
   resolved_at timestamptz
 );

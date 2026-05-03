@@ -1,13 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const STORAGE_KEY = 'eastfork-assignees'
 const DEFAULT_ASSIGNEES = ['Arline', 'Nicole']
 
 type Priority = 'low' | 'medium' | 'high' | 'critical'
-type Status = 'open' | 'in-progress' | 'resolved' | 'wont-fix'
+type Status = 'open' | 'in-progress' | 'resolved' | 'wont-fix' | 'post-go-live'
 type Category = 'data' | 'workflow' | 'configuration' | 'training' | 'integration' | 'other'
+type Module = 'financials-banking' | 'distribution' | 'shopify' | 'edi' | 'other-unsure'
 
 interface Issue {
   id: number
@@ -17,6 +20,7 @@ interface Issue {
   category: Category
   priority: Priority
   status: Status
+  module_area: Module | null
   submitted_by: string
   assigned_to: string | null
   notes: string | null
@@ -44,6 +48,7 @@ const STATUS_BADGE: Record<Status, string> = {
   'in-progress': 'bg-violet-50 text-violet-700 border-violet-200',
   resolved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'wont-fix': 'bg-slate-100 text-slate-500 border-slate-200',
+  'post-go-live': 'bg-teal-50 text-teal-700 border-teal-200',
 }
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -51,6 +56,7 @@ const STATUS_LABELS: Record<Status, string> = {
   'in-progress': 'In Progress',
   resolved: 'Resolved',
   'wont-fix': "Won't Fix",
+  'post-go-live': 'Post Go-Live',
 }
 
 const CATEGORY_BADGE: Record<Category, string> = {
@@ -61,6 +67,24 @@ const CATEGORY_BADGE: Record<Category, string> = {
   integration: 'bg-pink-50 text-pink-700 border-pink-200',
   other: 'bg-slate-100 text-slate-500 border-slate-200',
 }
+
+const MODULE_BADGE: Record<Module, string> = {
+  'financials-banking': 'bg-green-50 text-green-700 border-green-200',
+  distribution: 'bg-orange-50 text-orange-700 border-orange-200',
+  shopify: 'bg-lime-50 text-lime-700 border-lime-200',
+  edi: 'bg-blue-50 text-blue-700 border-blue-200',
+  'other-unsure': 'bg-slate-100 text-slate-500 border-slate-200',
+}
+
+const MODULE_LABELS: Record<Module, string> = {
+  'financials-banking': 'Financials/Banking',
+  distribution: 'Distribution',
+  shopify: 'Shopify',
+  edi: 'EDI',
+  'other-unsure': 'Other/Unsure',
+}
+
+const MODULES: Module[] = ['financials-banking', 'distribution', 'shopify', 'edi', 'other-unsure']
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -77,6 +101,95 @@ function Badge({ className, children }: { className: string; children: React.Rea
     >
       {children}
     </span>
+  )
+}
+
+function MarkdownEditor({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const [preview, setPreview] = useState(false)
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  function wrap(before: string, after: string, placeholder: string) {
+    const ta = ref.current
+    if (!ta) return
+    const s = ta.selectionStart
+    const e = ta.selectionEnd
+    const sel = value.slice(s, e) || placeholder
+    const next = value.slice(0, s) + before + sel + after + value.slice(e)
+    onChange(next)
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(s + before.length, s + before.length + sel.length)
+    })
+  }
+
+  function insertLine(prefix: string) {
+    const ta = ref.current
+    if (!ta) return
+    const s = ta.selectionStart
+    const lineStart = value.lastIndexOf('\n', s - 1) + 1
+    const next = value.slice(0, lineStart) + prefix + value.slice(lineStart)
+    onChange(next)
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(s + prefix.length, s + prefix.length)
+    })
+  }
+
+  const toolBtn = 'px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-colors'
+
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#00aeef] focus-within:ring-1 focus-within:ring-[#00aeef]/20 transition-colors">
+      {/* Toolbar */}
+      <div className="flex items-center gap-0.5 px-2 py-1.5 bg-slate-50 border-b border-slate-100 flex-wrap">
+        <button type="button" onClick={() => wrap('**', '**', 'bold text')} className={`${toolBtn} font-bold`} title="Bold">B</button>
+        <button type="button" onClick={() => wrap('*', '*', 'italic text')} className={`${toolBtn} italic`} title="Italic">I</button>
+        <button type="button" onClick={() => wrap('`', '`', 'code')} className={`${toolBtn} font-mono text-[11px]`} title="Inline code">&lt;/&gt;</button>
+        <span className="w-px h-4 bg-slate-200 mx-1" />
+        <button type="button" onClick={() => insertLine('## ')} className={toolBtn} title="Heading">H2</button>
+        <button type="button" onClick={() => insertLine('- ')} className={toolBtn} title="Bullet list">• List</button>
+        <button type="button" onClick={() => insertLine('1. ')} className={toolBtn} title="Numbered list"># List</button>
+        <span className="w-px h-4 bg-slate-200 mx-1" />
+        <button type="button" onClick={() => wrap('[', '](https://)', 'link text')} className={toolBtn} title="Link">Link</button>
+        <button type="button" onClick={() => wrap('![', '](https://)', 'image description')} className={toolBtn} title="Image URL">Image</button>
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setPreview(v => !v)}
+            className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded border transition-colors ${
+              preview
+                ? 'bg-[#00aeef] text-white border-transparent'
+                : 'text-slate-400 border-slate-200 hover:border-[#00aeef] hover:text-[#00aeef]'
+            }`}
+          >
+            {preview ? 'Edit' : 'Preview'}
+          </button>
+        </div>
+      </div>
+
+      {preview ? (
+        <div className="px-4 py-3 min-h-[200px] bg-white prose prose-sm max-w-none prose-img:rounded-lg prose-img:max-h-96 prose-a:text-[#00aeef]">
+          {value.trim()
+            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+            : <span className="text-slate-300 text-sm italic">Nothing to preview yet.</span>
+          }
+        </div>
+      ) : (
+        <textarea
+          ref={ref}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          rows={9}
+          className="w-full px-3 py-3 text-sm text-slate-800 bg-white resize-y focus:outline-none placeholder-slate-300 leading-relaxed"
+          placeholder={`Describe the issue in as much detail as possible.\n\nInclude:\n• Exact steps to reproduce the problem\n• Affected records, accounts, or data\n• Expected behavior vs. what actually happened\n• Any error messages you see\n\nTo add an image, use: ![description](paste-image-url-here)`}
+        />
+      )}
+    </div>
   )
 }
 
@@ -261,6 +374,9 @@ function IssueCard({
             <Badge className={PRIORITY_BADGE[issue.priority]}>{issue.priority}</Badge>
             <Badge className={STATUS_BADGE[issue.status]}>{STATUS_LABELS[issue.status]}</Badge>
             <Badge className={CATEGORY_BADGE[issue.category]}>{issue.category}</Badge>
+            {issue.module_area && (
+              <Badge className={MODULE_BADGE[issue.module_area]}>{MODULE_LABELS[issue.module_area]}</Badge>
+            )}
           </div>
           <p className="text-slate-800 font-semibold text-[13px] leading-snug mb-2">{issue.title}</p>
         <div className="font-mono text-[10px] text-slate-400 flex flex-wrap gap-x-1.5 items-center">
@@ -291,7 +407,9 @@ function IssueCard({
       {expanded && (
         <div className="px-4 pb-4 border-t border-slate-100">
           {issue.description && (
-            <p className="text-slate-600 text-[13px] leading-relaxed mt-3">{issue.description}</p>
+            <div className="mt-3 prose prose-sm max-w-none text-slate-600 prose-img:rounded-lg prose-img:max-h-96 prose-a:text-[#00aeef] prose-headings:text-slate-800 prose-code:text-[#00aeef] prose-code:bg-sky-50 prose-code:rounded prose-code:px-1">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{issue.description}</ReactMarkdown>
+            </div>
           )}
 
           {issue.notes && (
@@ -333,6 +451,7 @@ function IssueCard({
                       <option value="in-progress">In Progress</option>
                       <option value="resolved">Resolved</option>
                       <option value="wont-fix">Won&apos;t Fix</option>
+                      <option value="post-go-live">Post Go-Live Task</option>
                     </select>
                   </div>
                   <div>
@@ -391,6 +510,7 @@ const STATUS_TABS = [
   { value: 'in-progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'wont-fix', label: "Won't Fix" },
+  { value: 'post-go-live', label: 'Post Go-Live' },
 ]
 
 const CATEGORIES: Category[] = ['data', 'workflow', 'configuration', 'training', 'integration', 'other']
@@ -433,6 +553,7 @@ export default function Home() {
     submitted_by: '',
     category: 'data',
     priority: 'medium',
+    module_area: 'other-unsure',
     assigned_to: '',
   })
 
@@ -493,6 +614,7 @@ export default function Home() {
         submitted_by: '',
         category: 'data',
         priority: 'medium',
+        module_area: 'other-unsure',
         assigned_to: '',
       })
       setFormOpen(false)
@@ -593,12 +715,12 @@ export default function Home() {
               </div>
               <div>
                 <label className={labelClass}>Description</label>
-                <textarea
+                <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
+                  The more detail you include, the faster this gets resolved. Describe what happened, what you expected, which records or screens are affected, and any error messages. Use the toolbar to format text or embed images via URL.
+                </p>
+                <MarkdownEditor
                   value={form.description}
-                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                  className={`${inputClass} resize-none`}
-                  placeholder="Steps to reproduce, impact, context…"
+                  onChange={(v) => setForm((p) => ({ ...p, description: v }))}
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -623,7 +745,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={labelClass}>Category *</label>
                   <select
@@ -648,6 +770,20 @@ export default function Home() {
                     {PRIORITIES.map((p) => (
                       <option key={p} value={p}>
                         {cap(p)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Module / Area</label>
+                  <select
+                    value={form.module_area}
+                    onChange={(e) => setForm((p) => ({ ...p, module_area: e.target.value }))}
+                    className={inputClass}
+                  >
+                    {MODULES.map((m) => (
+                      <option key={m} value={m}>
+                        {MODULE_LABELS[m]}
                       </option>
                     ))}
                   </select>
