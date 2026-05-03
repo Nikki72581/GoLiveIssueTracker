@@ -112,6 +112,7 @@ function MarkdownEditor({
   onChange: (v: string) => void
 }) {
   const [preview, setPreview] = useState(false)
+  const [pasteHint, setPasteHint] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
 
   function wrap(before: string, after: string, placeholder: string) {
@@ -141,6 +142,31 @@ function MarkdownEditor({
     })
   }
 
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const imageItem = Array.from(e.clipboardData.items).find(item => item.type.startsWith('image/'))
+    if (!imageItem) return
+    e.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const ta = ref.current
+      if (!ta) return
+      const s = ta.selectionStart
+      const insertion = `![screenshot](${dataUrl})`
+      const next = value.slice(0, s) + insertion + value.slice(s)
+      onChange(next)
+      requestAnimationFrame(() => {
+        ta.focus()
+        ta.setSelectionRange(s + insertion.length, s + insertion.length)
+      })
+      setPasteHint(true)
+      setTimeout(() => setPasteHint(false), 2500)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const toolBtn = 'px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-colors'
 
   return (
@@ -157,7 +183,10 @@ function MarkdownEditor({
         <span className="w-px h-4 bg-slate-200 mx-1" />
         <button type="button" onClick={() => wrap('[', '](https://)', 'link text')} className={toolBtn} title="Link">Link</button>
         <button type="button" onClick={() => wrap('![', '](https://)', 'image description')} className={toolBtn} title="Image URL">Image</button>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {pasteHint && (
+            <span className="font-mono text-[9px] text-emerald-600 animate-pulse">Screenshot pasted</span>
+          )}
           <button
             type="button"
             onClick={() => setPreview(v => !v)}
@@ -184,9 +213,10 @@ function MarkdownEditor({
           ref={ref}
           value={value}
           onChange={e => onChange(e.target.value)}
+          onPaste={handlePaste}
           rows={9}
           className="w-full px-3 py-3 text-sm text-slate-800 bg-white resize-y focus:outline-none placeholder-slate-300 leading-relaxed"
-          placeholder={`Describe the issue in as much detail as possible.\n\nInclude:\n• Exact steps to reproduce the problem\n• Affected records, accounts, or data\n• Expected behavior vs. what actually happened\n• Any error messages you see\n\nTo add an image, use: ![description](paste-image-url-here)`}
+          placeholder={`Describe the issue in as much detail as possible.\n\nInclude:\n• Exact steps to reproduce the problem\n• Affected records, accounts, or data\n• Expected behavior vs. what actually happened\n• Any error messages you see\n\nTip: paste a screenshot directly with Cmd+V / Ctrl+V`}
         />
       )}
     </div>
@@ -716,7 +746,7 @@ export default function Home() {
               <div>
                 <label className={labelClass}>Description</label>
                 <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-                  The more detail you include, the faster this gets resolved. Describe what happened, what you expected, which records or screens are affected, and any error messages. Use the toolbar to format text or embed images via URL.
+                  The more detail you include, the faster this gets resolved. Describe what happened, what you expected, which records or screens are affected, and any error messages. You can paste a screenshot directly into the text area with Cmd+V / Ctrl+V.
                 </p>
                 <MarkdownEditor
                   value={form.description}
