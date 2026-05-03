@@ -313,6 +313,7 @@ export default function Home() {
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [assignees, setAssignees] = useState<string[]>(DEFAULT_ASSIGNEES)
 
   useEffect(() => {
@@ -349,8 +350,12 @@ export default function Home() {
     setLoading(true)
     try {
       const res = await fetch('/api/issues')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setIssues(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to fetch issues:', err)
+      setIssues([])
     } finally {
       setLoading(false)
     }
@@ -378,26 +383,31 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
+    setSubmitError(null)
     try {
       const res = await fetch('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, assigned_to: form.assigned_to || null }),
       })
-      if (res.ok) {
-        const newIssue: Issue = await res.json()
-        if (form.assigned_to.trim()) addAssignee(form.assigned_to.trim())
-        setIssues((prev) => [newIssue, ...prev])
-        setForm({
-          title: '',
-          description: '',
-          submitted_by: '',
-          category: 'data',
-          priority: 'medium',
-          assigned_to: '',
-        })
-        setFormOpen(false)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `Server error (${res.status})`)
       }
+      const newIssue: Issue = await res.json()
+      if (form.assigned_to.trim()) addAssignee(form.assigned_to.trim())
+      setIssues((prev) => [newIssue, ...prev])
+      setForm({
+        title: '',
+        description: '',
+        submitted_by: '',
+        category: 'data',
+        priority: 'medium',
+        assigned_to: '',
+      })
+      setFormOpen(false)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -462,7 +472,7 @@ export default function Home() {
         {/* Submit form */}
         <div className="mb-8">
           <button
-            onClick={() => setFormOpen((v) => !v)}
+            onClick={() => { setFormOpen((v) => !v); setSubmitError(null) }}
             className={`flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl border transition-all duration-150 ${
               formOpen
                 ? 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 shadow-sm'
@@ -549,6 +559,11 @@ export default function Home() {
                   </select>
                 </div>
               </div>
+              {submitError && (
+                <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {submitError}
+                </p>
+              )}
               <div className="flex justify-end pt-1">
                 <button
                   type="submit"
