@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-const STELLAR_TEAM = ['Arline', 'Nicole']
+const STORAGE_KEY = 'eastfork-assignees'
+const DEFAULT_ASSIGNEES = ['Arline', 'Nicole']
 
 type Priority = 'low' | 'medium' | 'high' | 'critical'
 type Status = 'open' | 'in-progress' | 'resolved' | 'wont-fix'
@@ -22,25 +23,27 @@ interface Issue {
   resolved_at: string | null
 }
 
+// Left border color per priority
 const PRIORITY_BORDER: Record<Priority, string> = {
   critical: 'border-l-red-500',
   high: 'border-l-orange-500',
-  medium: 'border-l-yellow-500',
-  low: 'border-l-slate-600',
+  medium: 'border-l-amber-400',
+  low: 'border-l-slate-300',
 }
 
+// Badge: background + text + border
 const PRIORITY_BADGE: Record<Priority, string> = {
-  critical: 'bg-red-950/60 text-red-400 border-red-800/50',
-  high: 'bg-orange-950/60 text-orange-400 border-orange-800/50',
-  medium: 'bg-yellow-950/60 text-yellow-500 border-yellow-800/50',
-  low: 'bg-slate-800/60 text-slate-400 border-slate-700/50',
+  critical: 'bg-red-50 text-red-700 border-red-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  low: 'bg-slate-100 text-slate-500 border-slate-200',
 }
 
 const STATUS_BADGE: Record<Status, string> = {
-  open: 'bg-blue-950/60 text-blue-400 border-blue-800/50',
-  'in-progress': 'bg-violet-950/60 text-violet-400 border-violet-800/50',
-  resolved: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/50',
-  'wont-fix': 'bg-slate-800/60 text-slate-400 border-slate-700/50',
+  open: 'bg-sky-50 text-sky-700 border-sky-200',
+  'in-progress': 'bg-violet-50 text-violet-700 border-violet-200',
+  resolved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'wont-fix': 'bg-slate-100 text-slate-500 border-slate-200',
 }
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -51,12 +54,12 @@ const STATUS_LABELS: Record<Status, string> = {
 }
 
 const CATEGORY_BADGE: Record<Category, string> = {
-  data: 'bg-cyan-950/60 text-cyan-400 border-cyan-900/50',
-  workflow: 'bg-indigo-950/60 text-indigo-400 border-indigo-900/50',
-  configuration: 'bg-purple-950/60 text-purple-400 border-purple-900/50',
-  training: 'bg-teal-950/60 text-teal-400 border-teal-900/50',
-  integration: 'bg-pink-950/60 text-pink-400 border-pink-900/50',
-  other: 'bg-slate-800/60 text-slate-400 border-slate-700/50',
+  data: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  workflow: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  configuration: 'bg-purple-50 text-purple-700 border-purple-200',
+  training: 'bg-teal-50 text-teal-700 border-teal-200',
+  integration: 'bg-pink-50 text-pink-700 border-pink-200',
+  other: 'bg-slate-100 text-slate-500 border-slate-200',
 }
 
 function formatDate(iso: string) {
@@ -70,14 +73,56 @@ function formatDate(iso: string) {
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-block font-mono text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${className}`}
+      className={`inline-block font-mono text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${className}`}
     >
       {children}
     </span>
   )
 }
 
-function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issue) => void }) {
+function AssignToInput({
+  value,
+  onChange,
+  assignees,
+  listId,
+  className,
+}: {
+  value: string
+  onChange: (val: string) => void
+  assignees: string[]
+  listId: string
+  className?: string
+}) {
+  return (
+    <>
+      <input
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={className}
+        placeholder="Type a name…"
+        autoComplete="off"
+      />
+      <datalist id={listId}>
+        {assignees.map((a) => (
+          <option key={a} value={a} />
+        ))}
+      </datalist>
+    </>
+  )
+}
+
+function IssueCard({
+  issue,
+  onUpdate,
+  assignees,
+  onAddAssignee,
+}: {
+  issue: Issue
+  onUpdate: (updated: Issue) => void
+  assignees: string[]
+  onAddAssignee: (name: string) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editStatus, setEditStatus] = useState<Status>(issue.status)
@@ -88,7 +133,7 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
   const isInactive = issue.status === 'resolved' || issue.status === 'wont-fix'
 
   const selectClass =
-    'w-full bg-[#070a12] border border-[#1c2a42] text-[#c0cce8] text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#3060a0] transition-colors'
+    'w-full bg-white border border-slate-200 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#00aeef] focus:ring-1 focus:ring-[#00aeef]/20 transition-colors'
 
   async function handleSave() {
     setSaving(true)
@@ -104,6 +149,7 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
       })
       if (res.ok) {
         const updated: Issue = await res.json()
+        if (editAssigned.trim()) onAddAssignee(editAssigned.trim())
         onUpdate(updated)
         setEditing(false)
       }
@@ -121,14 +167,14 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
 
   return (
     <div
-      className={`border-l-4 ${PRIORITY_BORDER[issue.priority]} bg-[#0d1525] border border-[#1c2a42] rounded-r-xl transition-opacity duration-200 ${
+      className={`border-l-4 ${PRIORITY_BORDER[issue.priority]} bg-white border border-slate-200 rounded-r-xl shadow-sm transition-opacity duration-200 ${
         isInactive ? 'opacity-60' : 'opacity-100'
       }`}
     >
-      {/* Collapsed header — always visible */}
+      {/* Collapsed header */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left p-4 hover:bg-white/[0.015] transition-colors rounded-r-xl"
+        className="w-full text-left p-4 hover:bg-slate-50 transition-colors rounded-r-xl"
         aria-expanded={expanded}
       >
         <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -136,17 +182,17 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
           <Badge className={STATUS_BADGE[issue.status]}>{STATUS_LABELS[issue.status]}</Badge>
           <Badge className={CATEGORY_BADGE[issue.category]}>{issue.category}</Badge>
         </div>
-        <p className="text-[#c0cce8] font-medium text-[13px] leading-snug mb-2">{issue.title}</p>
-        <div className="font-mono text-[10px] text-[#3d5580] flex flex-wrap gap-x-1.5 items-center">
+        <p className="text-slate-800 font-semibold text-[13px] leading-snug mb-2">{issue.title}</p>
+        <div className="font-mono text-[10px] text-slate-400 flex flex-wrap gap-x-1.5 items-center">
           <span>#{issue.id}</span>
-          <span className="text-[#1e2e48]">·</span>
+          <span className="text-slate-200">·</span>
           <span>{formatDate(issue.created_at)}</span>
-          <span className="text-[#1e2e48]">·</span>
+          <span className="text-slate-200">·</span>
           <span>{issue.submitted_by}</span>
           {issue.assigned_to && (
             <>
-              <span className="text-[#1e2e48]">·</span>
-              <span className="text-[#5070a0]">→ {issue.assigned_to}</span>
+              <span className="text-slate-200">·</span>
+              <span className="text-[#00aeef]">→ {issue.assigned_to}</span>
             </>
           )}
         </div>
@@ -154,22 +200,22 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
 
       {/* Expanded content */}
       {expanded && (
-        <div className="px-4 pb-4 border-t border-[#141e30]">
+        <div className="px-4 pb-4 border-t border-slate-100">
           {issue.description && (
-            <p className="text-[#7a8cac] text-[13px] leading-relaxed mt-3">{issue.description}</p>
+            <p className="text-slate-600 text-[13px] leading-relaxed mt-3">{issue.description}</p>
           )}
 
           {issue.notes && (
-            <div className="mt-3 bg-[#080e1a] border border-[#1a2538] rounded-lg p-3">
-              <p className="font-mono text-[9px] text-[#3d5580] uppercase tracking-widest mb-1.5">
+            <div className="mt-3 bg-sky-50 border border-sky-100 rounded-lg p-3">
+              <p className="font-mono text-[9px] text-sky-600 uppercase tracking-widest mb-1.5 font-semibold">
                 Team Notes
               </p>
-              <p className="text-[#7a8cac] text-[13px] leading-relaxed">{issue.notes}</p>
+              <p className="text-slate-600 text-[13px] leading-relaxed">{issue.notes}</p>
             </div>
           )}
 
           {issue.resolved_at && (
-            <p className="mt-3 font-mono text-[10px] text-emerald-600">
+            <p className="mt-3 font-mono text-[10px] text-emerald-600 font-semibold">
               ✓ Resolved {formatDate(issue.resolved_at)}
             </p>
           )}
@@ -178,15 +224,15 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
             {!editing ? (
               <button
                 onClick={() => setEditing(true)}
-                className="font-mono text-[10px] uppercase tracking-wider text-[#3d5a8a] hover:text-[#6080b8] border border-[#1c2e4a] hover:border-[#2a4070] px-3 py-1.5 rounded-lg transition-colors"
+                className="font-mono text-[10px] uppercase tracking-wider text-[#00aeef] hover:text-[#0090cc] border border-[#00aeef]/30 hover:border-[#00aeef]/60 px-3 py-1.5 rounded-lg transition-colors"
               >
                 Update status / notes ↓
               </button>
             ) : (
-              <div className="bg-[#080e1a] border border-[#1a2538] rounded-xl p-4 space-y-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-[#3d5580] mb-1.5">
+                    <label className="block font-mono text-[9px] uppercase tracking-widest text-slate-400 mb-1.5 font-semibold">
                       Status
                     </label>
                     <select
@@ -201,25 +247,20 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
                     </select>
                   </div>
                   <div>
-                    <label className="block font-mono text-[9px] uppercase tracking-widest text-[#3d5580] mb-1.5">
+                    <label className="block font-mono text-[9px] uppercase tracking-widest text-slate-400 mb-1.5 font-semibold">
                       Assign To
                     </label>
-                    <select
+                    <AssignToInput
                       value={editAssigned}
-                      onChange={(e) => setEditAssigned(e.target.value)}
+                      onChange={setEditAssigned}
+                      assignees={assignees}
+                      listId={`assignees-card-${issue.id}`}
                       className={selectClass}
-                    >
-                      <option value="">Unassigned</option>
-                      {STELLAR_TEAM.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                 </div>
                 <div>
-                  <label className="block font-mono text-[9px] uppercase tracking-widest text-[#3d5580] mb-1.5">
+                  <label className="block font-mono text-[9px] uppercase tracking-widest text-slate-400 mb-1.5 font-semibold">
                     Notes
                   </label>
                   <textarea
@@ -234,13 +275,13 @@ function IssueCard({ issue, onUpdate }: { issue: Issue; onUpdate: (updated: Issu
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-mono text-[10px] uppercase tracking-wider px-5 py-2 rounded-lg transition-colors"
+                    className="bg-[#00aeef] hover:bg-[#0090cc] disabled:opacity-50 text-white font-semibold text-xs px-5 py-2 rounded-lg transition-colors shadow-sm"
                   >
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                   <button
                     onClick={cancelEdit}
-                    className="font-mono text-[10px] uppercase tracking-wider text-[#4a5f80] hover:text-[#7a8cac] px-3 py-2 transition-colors"
+                    className="text-xs text-slate-400 hover:text-slate-600 px-3 py-2 transition-colors"
                   >
                     Cancel
                   </button>
@@ -272,6 +313,29 @@ export default function Home() {
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [assignees, setAssignees] = useState<string[]>(DEFAULT_ASSIGNEES)
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as string[]
+        if (Array.isArray(parsed) && parsed.length > 0) setAssignees(parsed)
+      } catch {}
+    }
+  }, [])
+
+  function addAssignee(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setAssignees((prev) => {
+      if (prev.some((a) => a.toLowerCase() === trimmed.toLowerCase())) return prev
+      const updated = [...prev, trimmed]
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -322,6 +386,7 @@ export default function Home() {
       })
       if (res.ok) {
         const newIssue: Issue = await res.json()
+        if (form.assigned_to.trim()) addAssignee(form.assigned_to.trim())
         setIssues((prev) => [newIssue, ...prev])
         setForm({
           title: '',
@@ -343,58 +408,65 @@ export default function Home() {
   }
 
   const inputClass =
-    'w-full bg-[#070a12] border border-[#1c2a42] text-[#c0cce8] text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#3060a0] transition-colors placeholder-[#2a3a54]'
+    'w-full bg-white border border-slate-200 text-slate-800 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#00aeef] focus:ring-1 focus:ring-[#00aeef]/20 transition-colors placeholder-slate-300'
   const labelClass =
-    'block font-mono text-[9px] uppercase tracking-widest text-[#3d5580] mb-1.5'
+    'block font-mono text-[9px] uppercase tracking-widest text-slate-400 mb-1.5 font-semibold'
 
   function cap(s: string) {
     return s.charAt(0).toUpperCase() + s.slice(1)
   }
 
   return (
-    <div className="min-h-screen bg-[#060810] text-[#c0cce8]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-        {/* Header */}
-        <header className="mb-10">
-          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-[#2a3a58] mb-2">
-            Stellar One
-          </p>
-          <h1 className="font-display text-2xl sm:text-[2rem] font-bold text-white tracking-tight leading-none mb-2">
-            EastFork Go-Live Tracker
-          </h1>
-          <p className="text-[#4a6080] text-sm">
-            Log issues, track progress, and stay aligned through go-live.
-          </p>
-        </header>
-
-        {/* Stats bar */}
-        <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-8">
-          {[
-            { label: 'Open', value: stats.open, color: 'text-blue-400' },
-            { label: 'In Progress', value: stats.inProgress, color: 'text-violet-400' },
-            { label: 'Resolved', value: stats.resolved, color: 'text-emerald-400' },
-            { label: 'Critical', value: stats.critical, color: 'text-red-400' },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="bg-[#0d1525] border border-[#1c2a42] rounded-xl p-3 text-center"
+    <div className="min-h-screen bg-[#f0f4f9] text-slate-800">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 shadow-sm px-4 sm:px-8 lg:px-12 py-5 sm:py-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+          <div>
+            <p
+              className="font-mono text-[9px] uppercase tracking-[0.3em] mb-1.5 font-semibold"
+              style={{ color: '#00aeef' }}
             >
-              <div className={`font-mono text-2xl font-bold leading-none ${s.color}`}>{s.value}</div>
-              <div className="font-mono text-[8px] uppercase tracking-widest text-[#3d5580] mt-1.5 leading-tight">
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
+              Stellar One
+            </p>
+            <h1 className="text-2xl sm:text-3xl lg:text-[2rem] font-bold text-slate-900 tracking-tight leading-none mb-1.5">
+              EastFork Go-Live Tracker
+            </h1>
+            <p className="text-slate-400 text-sm">
+              Log issues, track progress, and stay aligned through go-live.
+            </p>
+          </div>
 
+          {/* Stats — inline on desktop, stacked on mobile */}
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 sm:shrink-0">
+            {[
+              { label: 'Open', value: stats.open, color: 'text-sky-500', bg: 'bg-sky-50', border: 'border-sky-100' },
+              { label: 'In Progress', value: stats.inProgress, color: 'text-violet-500', bg: 'bg-violet-50', border: 'border-violet-100' },
+              { label: 'Resolved', value: stats.resolved, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+              { label: 'Critical', value: stats.critical, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100' },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className={`${s.bg} border ${s.border} rounded-xl px-3 sm:px-5 py-3 text-center min-w-[62px]`}
+              >
+                <div className={`font-bold text-xl sm:text-2xl leading-none ${s.color}`}>{s.value}</div>
+                <div className="font-mono text-[8px] uppercase tracking-widest text-slate-400 mt-1.5 leading-tight whitespace-nowrap">
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <div className="px-4 sm:px-8 lg:px-12 py-8">
         {/* Submit form */}
         <div className="mb-8">
           <button
             onClick={() => setFormOpen((v) => !v)}
-            className={`flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border transition-all duration-150 ${
+            className={`flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl border transition-all duration-150 ${
               formOpen
-                ? 'bg-transparent text-[#4a6080] border-[#1c2a42] hover:border-[#2a3a54]'
-                : 'bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-lg shadow-blue-900/30'
+                ? 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 shadow-sm'
+                : 'bg-[#00aeef] hover:bg-[#0090cc] text-white border-transparent shadow-md shadow-sky-200'
             }`}
           >
             {formOpen ? '✕  Cancel' : '+  Log Issue'}
@@ -403,7 +475,7 @@ export default function Home() {
           {formOpen && (
             <form
               onSubmit={handleSubmit}
-              className="mt-4 bg-[#0d1525] border border-[#1c2a42] rounded-2xl p-5 sm:p-6 space-y-4"
+              className="mt-4 max-w-2xl bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm"
             >
               <div>
                 <label className={labelClass}>Title *</label>
@@ -438,18 +510,13 @@ export default function Home() {
                 </div>
                 <div>
                   <label className={labelClass}>Assign To</label>
-                  <select
+                  <AssignToInput
                     value={form.assigned_to}
-                    onChange={(e) => setForm((p) => ({ ...p, assigned_to: e.target.value }))}
+                    onChange={(val) => setForm((p) => ({ ...p, assigned_to: val }))}
+                    assignees={assignees}
+                    listId="assignees-form"
                     className={inputClass}
-                  >
-                    <option value="">Unassigned</option>
-                    {STELLAR_TEAM.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -486,7 +553,7 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-mono text-[10px] uppercase tracking-wider px-6 py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/30"
+                  className="bg-[#00aeef] hover:bg-[#0090cc] disabled:opacity-50 text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition-colors shadow-md shadow-sky-200"
                 >
                   {submitting ? 'Submitting…' : 'Submit Issue'}
                 </button>
@@ -497,15 +564,15 @@ export default function Home() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-5">
-          <div className="flex bg-[#0d1525] border border-[#1c2a42] rounded-xl overflow-hidden">
+          <div className="flex bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.value}
                 onClick={() => setStatusFilter(tab.value)}
                 className={`font-mono text-[9px] uppercase tracking-wider px-3 py-2 transition-colors whitespace-nowrap ${
                   statusFilter === tab.value
-                    ? 'bg-blue-600 text-white'
-                    : 'text-[#4a6080] hover:text-[#8899bb]'
+                    ? 'bg-[#00aeef] text-white'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 {tab.label}
@@ -516,7 +583,7 @@ export default function Home() {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="bg-[#0d1525] border border-[#1c2a42] text-[#6a80a0] font-mono text-[9px] uppercase tracking-wider rounded-xl px-3 py-2 focus:outline-none focus:border-[#2a3a54]"
+            className="bg-white border border-slate-200 text-slate-500 font-mono text-[9px] uppercase tracking-wider rounded-xl px-3 py-2 shadow-sm focus:outline-none focus:border-[#00aeef]"
           >
             <option value="all">All Priorities</option>
             {PRIORITIES.map((p) => (
@@ -528,37 +595,43 @@ export default function Home() {
 
           <button
             onClick={fetchIssues}
-            className="ml-auto font-mono text-[9px] uppercase tracking-wider text-[#3d5580] hover:text-[#6a80a0] transition-colors"
+            className="ml-auto font-mono text-[9px] uppercase tracking-wider text-slate-400 hover:text-[#00aeef] transition-colors"
           >
             ↻ Refresh
           </button>
         </div>
 
         {/* Issue list */}
-        <div className="space-y-2">
-          {loading ? (
-            <div className="py-20 text-center">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-[#3d5580] animate-pulse">
-                Loading issues…
-              </p>
-            </div>
-          ) : filteredIssues.length === 0 ? (
-            <div className="py-16 bg-[#0d1525] border border-[#1c2a42] rounded-2xl text-center">
-              <div className="text-[#1c2a42] text-5xl mb-4 select-none">◌</div>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-[#3d5580]">
-                No issues match the current filters
-              </p>
-            </div>
-          ) : (
-            filteredIssues.map((issue) => (
-              <IssueCard key={issue.id} issue={issue} onUpdate={handleUpdate} />
-            ))
-          )}
-        </div>
+        {loading ? (
+          <div className="py-20 text-center">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-slate-400 animate-pulse">
+              Loading issues…
+            </p>
+          </div>
+        ) : filteredIssues.length === 0 ? (
+          <div className="py-16 bg-white border border-slate-200 rounded-2xl text-center shadow-sm">
+            <div className="text-slate-200 text-5xl mb-4 select-none">◌</div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-slate-400">
+              No issues match the current filters
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-3 items-start">
+            {filteredIssues.map((issue) => (
+              <IssueCard
+                key={issue.id}
+                issue={issue}
+                onUpdate={handleUpdate}
+                assignees={assignees}
+                onAddAssignee={addAssignee}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Footer */}
-        <footer className="mt-16 pt-6 border-t border-[#111b2c]">
-          <p className="font-mono text-[8px] uppercase tracking-[0.25em] text-[#2a3a54] text-center">
+        <footer className="mt-16 pt-6 border-t border-slate-200">
+          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-slate-300 text-center">
             EastFork · Stellar One · Powered by Acumatica
           </p>
         </footer>

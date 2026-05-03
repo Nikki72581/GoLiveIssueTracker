@@ -1,18 +1,18 @@
 import type { Metadata } from 'next'
-import { Syne, Space_Mono } from 'next/font/google'
+import { Poppins, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
-const syne = Syne({
+const poppins = Poppins({
   subsets: ['latin'],
-  variable: '--font-syne',
-  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-poppins',
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 
-const spaceMono = Space_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
-  weight: ['400', '700'],
+  weight: ['400', '500', '600'],
   display: 'swap',
 })
 
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${syne.variable} ${spaceMono.variable}`}>
+    <html lang="en" className={`${poppins.variable} ${jetbrainsMono.variable}`}>
       <body>{children}</body>
     </html>
   )

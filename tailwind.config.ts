@@ -9,8 +9,11 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        display: ['var(--font-syne)', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        sans: ['var(--font-poppins)', 'Poppins', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'monospace'],
+      },
+      colors: {
+        brand: '#00aeef',
       },
     },
   },

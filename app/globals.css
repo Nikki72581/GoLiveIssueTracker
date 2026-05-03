@@ -15,12 +15,13 @@
   }
 
   body {
-    background-color: #060810;
-    color: #c0cce8;
+    background-color: #f0f4f9;
+    color: #0f1b2d;
+    font-family: var(--font-poppins), 'Poppins', sans-serif;
   }
 
   select option {
-    background-color: #0d1525;
-    color: #c0cce8;
+    background-color: #ffffff;
+    color: #0f1b2d;
   }
 }
