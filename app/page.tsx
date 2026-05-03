@@ -106,15 +106,18 @@ function TrashIcon() {
   )
 }
 
-function ConfirmModal({ title, message, onConfirm, onCancel, loading }: {
-  title: string; message: string; onConfirm: () => void; onCancel: () => void; loading: boolean
+function ConfirmModal({ title, message, onConfirm, onCancel, loading, error }: {
+  title: string; message: string; onConfirm: () => void; onCancel: () => void; loading: boolean; error?: string | null
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onCancel} />
       <div className="relative bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-sm">
         <h3 className="text-slate-900 font-semibold text-base mb-1">{title}</h3>
-        <p className="text-slate-500 text-sm mb-6">{message}</p>
+        <p className="text-slate-500 text-sm mb-4">{message}</p>
+        {error && (
+          <p className="text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{error}</p>
+        )}
         <div className="flex gap-3 justify-end">
           <button onClick={onCancel} disabled={loading} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors">
             Cancel
@@ -157,15 +160,24 @@ function IssueRow({ issue, onUpdate, onDelete, assignees, onAddAssignee }: {
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   async function handleDelete() {
     setDeleting(true)
+    setDeleteError(null)
     try {
       const res = await fetch(`/api/issue/${issue.id}`, { method: 'DELETE' })
-      if (res.ok || res.status === 204) onDelete(issue.id)
+      if (res.status === 204) {
+        onDelete(issue.id)
+        setConfirmDelete(false)
+      } else {
+        const body = await res.json().catch(() => ({}))
+        setDeleteError(body.error ?? `Delete failed (${res.status}). Please try again.`)
+      }
+    } catch {
+      setDeleteError('Network error. Please try again.')
     } finally {
       setDeleting(false)
-      setConfirmDelete(false)
     }
   }
 
@@ -216,8 +228,9 @@ function IssueRow({ issue, onUpdate, onDelete, assignees, onAddAssignee }: {
           title="Delete issue?"
           message={`"${issue.title}" will be permanently removed and cannot be recovered.`}
           onConfirm={handleDelete}
-          onCancel={() => setConfirmDelete(false)}
+          onCancel={() => { setConfirmDelete(false); setDeleteError(null) }}
           loading={deleting}
+          error={deleteError}
         />
       )}
       <tr

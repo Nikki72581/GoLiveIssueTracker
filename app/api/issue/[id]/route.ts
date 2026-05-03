@@ -40,8 +40,12 @@ export async function DELETE(
 ) {
   const { id } = await params
 
-  const { error } = await supabase.from('issues').delete().eq('id', id)
+  const { error, count } = await supabase
+    .from('issues')
+    .delete({ count: 'exact' })
+    .eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (count === 0) return NextResponse.json({ error: 'Issue not found or could not be deleted.' }, { status: 404 })
   return new NextResponse(null, { status: 204 })
 }
