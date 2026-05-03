@@ -80,6 +80,58 @@ function Badge({ className, children }: { className: string; children: React.Rea
   )
 }
 
+function TrashIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  )
+}
+
+function ConfirmModal({
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  title: string
+  message: string
+  onConfirm: () => void
+  onCancel: () => void
+  loading: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-sm">
+        <h3 className="text-slate-900 font-semibold text-base mb-1">{title}</h3>
+        <p className="text-slate-500 text-sm mb-6">{message}</p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 px-4 py-2 rounded-xl transition-colors"
+          >
+            {loading ? 'Deleting…' : 'Yes, delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AssignToInput({
   value,
   onChange,
@@ -115,11 +167,13 @@ function AssignToInput({
 function IssueCard({
   issue,
   onUpdate,
+  onDelete,
   assignees,
   onAddAssignee,
 }: {
   issue: Issue
   onUpdate: (updated: Issue) => void
+  onDelete: (id: number) => void
   assignees: string[]
   onAddAssignee: (name: string) => void
 }) {
@@ -129,6 +183,21 @@ function IssueCard({
   const [editAssigned, setEditAssigned] = useState(issue.assigned_to ?? '')
   const [editNotes, setEditNotes] = useState(issue.notes ?? '')
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/issue/${issue.id}`, { method: 'DELETE' })
+      if (res.ok || res.status === 204) {
+        onDelete(issue.id)
+      }
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
 
   const isInactive = issue.status === 'resolved' || issue.status === 'wont-fix'
 
@@ -166,23 +235,34 @@ function IssueCard({
   }
 
   return (
+    <>
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete issue?"
+          message={`"${issue.title}" will be permanently removed and cannot be recovered.`}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+          loading={deleting}
+        />
+      )}
     <div
       className={`border-l-4 ${PRIORITY_BORDER[issue.priority]} bg-white border border-slate-200 rounded-r-xl shadow-sm transition-opacity duration-200 ${
         isInactive ? 'opacity-60' : 'opacity-100'
       }`}
     >
       {/* Collapsed header */}
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left p-4 hover:bg-slate-50 transition-colors rounded-r-xl"
-        aria-expanded={expanded}
-      >
-        <div className="flex flex-wrap gap-1.5 mb-2.5">
-          <Badge className={PRIORITY_BADGE[issue.priority]}>{issue.priority}</Badge>
-          <Badge className={STATUS_BADGE[issue.status]}>{STATUS_LABELS[issue.status]}</Badge>
-          <Badge className={CATEGORY_BADGE[issue.category]}>{issue.category}</Badge>
-        </div>
-        <p className="text-slate-800 font-semibold text-[13px] leading-snug mb-2">{issue.title}</p>
+      <div className="relative group">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full text-left p-4 hover:bg-slate-50 transition-colors rounded-r-xl pr-10"
+          aria-expanded={expanded}
+        >
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
+            <Badge className={PRIORITY_BADGE[issue.priority]}>{issue.priority}</Badge>
+            <Badge className={STATUS_BADGE[issue.status]}>{STATUS_LABELS[issue.status]}</Badge>
+            <Badge className={CATEGORY_BADGE[issue.category]}>{issue.category}</Badge>
+          </div>
+          <p className="text-slate-800 font-semibold text-[13px] leading-snug mb-2">{issue.title}</p>
         <div className="font-mono text-[10px] text-slate-400 flex flex-wrap gap-x-1.5 items-center">
           <span>#{issue.id}</span>
           <span className="text-slate-200">·</span>
@@ -196,7 +276,16 @@ function IssueCard({
             </>
           )}
         </div>
-      </button>
+        </button>
+        {/* Trash button — top-right corner, visible on hover */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
+          className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+          aria-label="Delete issue"
+        >
+          <TrashIcon />
+        </button>
+      </div>
 
       {/* Expanded content */}
       {expanded && (
@@ -292,6 +381,7 @@ function IssueCard({
         </div>
       )}
     </div>
+    </>
   )
 }
 
@@ -415,6 +505,10 @@ export default function Home() {
 
   function handleUpdate(updated: Issue) {
     setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+  }
+
+  function handleDelete(id: number) {
+    setIssues((prev) => prev.filter((i) => i.id !== id))
   }
 
   const inputClass =
@@ -637,6 +731,7 @@ export default function Home() {
                 key={issue.id}
                 issue={issue}
                 onUpdate={handleUpdate}
+                onDelete={handleDelete}
                 assignees={assignees}
                 onAddAssignee={addAssignee}
               />

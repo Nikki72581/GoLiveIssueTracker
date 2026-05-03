@@ -16,3 +16,4 @@ alter table issues enable row level security;
 create policy "Public read"   on issues for select using (true);
 create policy "Public insert" on issues for insert with check (true);
 create policy "Public update" on issues for update using (true);
+create policy "Public delete" on issues for delete using (true);
